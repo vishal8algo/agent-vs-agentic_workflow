@@ -1,0 +1,17 @@
+{
+  "name": "pr-review-demo",
+  "version": "0.1.0",
+  "description": "Demo comparing a fixed agentic workflow vs an autonomous agent for reviewing a GitHub PR.",
+  "type": "module",
+  "bin": {
+    "pr-review-demo": "src/cli.js"
+  },
+  "scripts": {
+    "review": "node src/cli.js review",
+    "capture": "node scripts/capture-fixture.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
