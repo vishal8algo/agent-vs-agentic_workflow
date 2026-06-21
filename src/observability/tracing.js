@@ -47,6 +47,7 @@ const NOOP_TRACER = {
   wrap: (provider) => provider,
   toolSpan: () => {},
   finish: () => {},
+  score: () => {},
 };
 
 /**
@@ -124,6 +125,15 @@ export function startRun(opts = {}) {
         trace.update({
           output: { status: result?.status, findings: result?.findings?.length ?? 0 },
         });
+      } catch {
+        /* ignore */
+      }
+    },
+
+    // Attach an evaluation score (e.g. the LLM judge) to this run's trace.
+    score({ name = "judge", value, comment } = {}) {
+      try {
+        trace.score({ name, value, comment });
       } catch {
         /* ignore */
       }

@@ -72,6 +72,10 @@ export class MockProvider {
   }
 
   #reply(prompt, json) {
+    // Judge request? Return a deterministic quality score keyed off the verdict.
+    if (/Grade this review/i.test(prompt)) {
+      return this.#judgeScore(prompt);
+    }
     // Agent decision request? Return the next scripted action (deterministic).
     if (/Decide the next action/i.test(prompt)) {
       return this.#agentAction(prompt);
@@ -91,6 +95,24 @@ export class MockProvider {
     }
     const firstLine = (prompt.split("\n").find((l) => l.trim()) ?? "").slice(0, 120);
     return `Mock response to: "${firstLine}"`;
+  }
+
+  // Deterministic judge: score the review by its verdict. Tuned so a permissive
+  // "ready" verdict falls below the default 0.7 bar while thorough verdicts pass
+  // — making cost-per-correct differ by mode in the offline demo.
+  #judgeScore(prompt) {
+    const m = prompt.match(/Verdict:\s*(.+)/i);
+    const verdict = (m ? m[1] : "").trim().toLowerCase();
+    const score =
+      verdict.startsWith("blocked") ? 0.88 :
+      verdict.startsWith("needs human review") ? 0.82 :
+      verdict.startsWith("ready with minor") ? 0.72 :
+      verdict.startsWith("ready") ? 0.6 :
+      0.5;
+    return JSON.stringify({
+      score,
+      justification: `[sample] Deterministic mock score for verdict "${verdict}".`,
+    });
   }
 
   // Deterministic agent "policy": pick the next action by how many steps the

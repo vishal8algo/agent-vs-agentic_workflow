@@ -17,8 +17,8 @@ Decisions recorded 2026-06-21 during build kickoff (Node/JS stack, fixtures-firs
 | Q11 | OPEN | Trace granularity for agent tool calls (spans vs events)? | Low | [assumption] Tool calls as nested spans under the agent trace. |
 | Q12 | OPEN | One trace per mode, or one parent trace with two children for `--mode both`? | Low | [assumption] Separate traces linked by a shared run/session id. |
 | Q13 | RESOLVED | Evaluation set design — how many PR fixtures, or sample N per PR? | High | Capture 3–5 small real PRs into `fixtures/` (via `capture-fixture.js`); cost-per-correct averages over the set. |
-| Q14 | OPEN | Judge model choice and self-preference bias mitigation? | High | [assumption] Use a capable judge model distinct from the one under test where possible. |
-| Q15 | OPEN | How to treat "needs human review" verdicts in correctness scoring? | Medium | [assumption] Judge rubric defines partial credit; disclose as approximation. |
+| Q14 | RESOLVED | Judge model choice and self-preference bias mitigation? | High | Judge with a stronger, distinct tier: `gemini-2.5-pro` (configurable via `--judge-model`). Self-preference limitation disclosed in the eval report. |
+| Q15 | RESOLVED | How to treat "needs human review" verdicts in correctness scoring? | Medium | Reference-free judge scores whether the verdict is appropriate for the diff (0–1); a well-justified "needs human review" can score high. Correct = score ≥ threshold (default 0.7). |
 
 ## Observability/eval decisions (recorded 2026-06-21)
 

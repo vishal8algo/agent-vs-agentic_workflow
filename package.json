@@ -10,6 +10,7 @@
     "review": "node src/cli.js review",
     "capture": "node scripts/capture-fixture.js",
     "view": "node scripts/serve-reports.js",
+    "eval": "node scripts/eval.js",
     "test": "node --test"
   },
   "engines": {

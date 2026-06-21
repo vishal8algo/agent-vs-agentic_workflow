@@ -1,0 +1,31 @@
+{
+  "source": "fixture:github",
+  "capturedFrom": "https://github.com/honojs/hono/pull/5013",
+  "pr": {
+    "url": "https://github.com/honojs/hono/pull/5013",
+    "repo": "honojs/hono",
+    "number": 5013,
+    "title": "fix(lambda-edge): satisfy Deno lib types for Content-Length body encoding",
+    "author": "yusukebe",
+    "description": "### The author should do the following, if applicable\r\n\r\n- [ ] Add tests\r\n- [ ] Run tests\r\n- [ ] `bun run format:fix && bun run lint:fix` to format the code\r\n- [ ] Add [TSDoc](https://tsdoc.org/)/[JSDoc](https://jsdoc.app/about-getting-started) to document the code\r\n",
+    "baseBranch": "main",
+    "headBranch": "fix/lambda-edge-cast",
+    "state": "closed"
+  },
+  "files": [
+    {
+      "path": "src/adapter/lambda-edge/handler.ts",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 1,
+      "patch": "@@ -168,7 +168,10 @@ const createRequest = (event: CloudFrontEdgeEvent): Request => {\n \n   let body: string | Uint8Array<ArrayBuffer> | undefined = rawBody\n   if (rawBody !== undefined) {\n-    const bytes = typeof rawBody === 'string' ? new TextEncoder().encode(rawBody) : rawBody\n+    const bytes =\n+      typeof rawBody === 'string'\n+        ? (new TextEncoder().encode(rawBody) as Uint8Array<ArrayBuffer>)\n+        : rawBody\n     body = bytes\n     headers.set('content-length', bytes.length.toString())\n   }"
+    }
+  ],
+  "commits": [
+    {
+      "sha": "9bc24a7",
+      "message": "fix(lambda-edge): satisfy Deno lib types for Content-Length body encoding"
+    }
+  ],
+  "checks": []
+}
