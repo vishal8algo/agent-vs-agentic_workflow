@@ -72,6 +72,10 @@ export class MockProvider {
   }
 
   #reply(prompt, json) {
+    // Agent decision request? Return the next scripted action (deterministic).
+    if (/Decide the next action/i.test(prompt)) {
+      return this.#agentAction(prompt);
+    }
     if (json) {
       const dim = this.#firstDimension(prompt);
       const evidence = this.#firstFile(prompt);
@@ -87,6 +91,52 @@ export class MockProvider {
     }
     const firstLine = (prompt.split("\n").find((l) => l.trim()) ?? "").slice(0, 120);
     return `Mock response to: "${firstLine}"`;
+  }
+
+  // Deterministic agent "policy": pick the next action by how many steps the
+  // transcript already shows. The real model would reason here instead.
+  #agentAction(prompt) {
+    const step = (prompt.match(/OBSERVATION:/g) ?? []).length;
+    const file = this.#firstPrFile(prompt);
+    const script = [
+      { thought: "Start by understanding the PR.", action: { tool: "get_pr_summary", args: {} } },
+      { thought: "See what changed.", action: { tool: "list_changed_files", args: {} } },
+      { thought: "Inspect the most relevant diff.", action: { tool: "read_file_diff", args: { path: file } } },
+      {
+        thought: "Record a correctness concern.",
+        action: {
+          tool: "record_finding",
+          args: {
+            severity: "high",
+            title: "[sample] Edge case may be unhandled in changed code",
+            detail: "Boundary/invalid input handling should be verified before merge.",
+            evidence: file,
+          },
+        },
+      },
+      {
+        thought: "Note a minor maintainability point.",
+        action: {
+          tool: "record_finding",
+          args: {
+            severity: "low",
+            title: "[sample] Consider documenting new behaviour",
+            detail: "A short note would help future maintainers.",
+            evidence: file,
+          },
+        },
+      },
+      { thought: "Enough evidence to judge.", action: { tool: "finalize_review", args: {} } },
+    ];
+    const choice = script[Math.min(step, script.length - 1)];
+    return JSON.stringify(choice);
+  }
+
+  // First file path from the "Files in this PR: a, b, c" line of the prompt.
+  #firstPrFile(prompt) {
+    const m = prompt.match(/Files in this PR:\s*([^\n]+)/i);
+    if (!m) return "(file)";
+    return m[1].split(",")[0].trim() || "(file)";
   }
 
   // Read the "Dimension: a, b, c" marker the prompt builder writes.
