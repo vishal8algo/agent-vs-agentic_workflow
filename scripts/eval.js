@@ -40,7 +40,8 @@ async function main(argv) {
   const outPath = args.out ?? "reports/eval.md";
   const fixturesDir = args["fixtures-dir"] ?? "fixtures/eval";
 
-  const fixtures = await collectFixtures(fixturesDir);
+  let fixtures = await collectFixtures(fixturesDir);
+  if (args.limit) fixtures = fixtures.slice(0, Number(args.limit)); // cap to conserve quota
   if (fixtures.length === 0) {
     console.error(`No fixtures found in ${fixturesDir} (and no fallback). Capture some first.`);
     process.exit(1);
@@ -56,7 +57,8 @@ async function main(argv) {
   const agg = { fixed: newAgg(), agent: newAgg() };
   const rows = [];
 
-  for (const fx of fixtures) {
+  try {
+   for (const fx of fixtures) {
     const ctx = await loadContext(fx);
     for (const mode of ["fixed", "agent"]) {
       const provider = createProvider(providerName, { model: args.model });
@@ -105,9 +107,11 @@ async function main(argv) {
         `  PR#${ctx.pr.number} ${mode.padEnd(5)} verdict=${review.status} score=${j.score.toFixed(2)} ${correct ? "OK" : "x"} cost=$${review.metrics.estCostUsd.toFixed(6)}`
       );
     }
+   }
+  } finally {
+    // Always flush traces/scores, even if a provider error aborts the run.
+    await shutdownTracing();
   }
-
-  await shutdownTracing();
 
   const report = renderEval({ rows, agg, providerName, judgeModel, threshold, fixtures });
   await mkdir(dirname(outPath), { recursive: true });
