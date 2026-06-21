@@ -17,8 +17,10 @@ import { loadContext, InputError } from "./context/loadContext.js";
 import { createProvider, ProviderError } from "./providers/llm.js";
 import { priceFor } from "./providers/pricing.js";
 import { Metrics } from "./metrics.js";
+import { startRun, tracingEnabled, shutdownTracing } from "./observability/tracing.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { fixedReview } from "./workflow/fixedReview.js";
 import { agentReview } from "./agent/agentReview.js";
 import { writeReports } from "./report/write.js";
@@ -36,6 +38,7 @@ Options:
   --model <name>              model name for the provider
   --max-agent-steps <n>       agent loop guardrail          (default: 8)
   --trace                     also write raw prompts/responses to reports/traces/
+  --no-trace-remote           disable Langfuse tracing for this run
   --verbose                   print progress
   --help                      show this help
 `;
@@ -69,6 +72,11 @@ async function main(argv) {
   const providerName = args.provider ?? "mock";
   const log = args.verbose ? (m) => process.stderr.write(m + "\n") : () => {};
 
+  // Observability (spec 05): trace to Langfuse when keys exist, unless disabled.
+  const useTrace = !args["no-trace-remote"] && tracingEnabled();
+  const sessionId = randomUUID();
+  if (useTrace) log(`Tracing to Langfuse (session ${sessionId}).`);
+
   // 2. Load the shared context.
   let ctx;
   try {
@@ -89,29 +97,41 @@ async function main(argv) {
     if (mode === "both" || mode === "fixed") {
       log("Running fixed workflow...");
       const provider = createProvider(providerName, { model: args.model });
+      const tracer = useTrace
+        ? startRun({ mode: "fixed", providerName, model: provider.model, pr: ctx.pr, fixture: args.fixture, sessionId })
+        : null;
       const metrics = new Metrics({
         mode: "fixed",
         model: provider.model,
         pricePerMTokens: priceFor(provider.model),
       }).start();
-      results.fixed = await fixedReview(ctx, provider, metrics);
+      results.fixed = await fixedReview(ctx, tracer ? tracer.wrap(provider) : provider, metrics);
       metrics.stop();
       results.fixed.metrics = metrics.toJSON();
+      tracer?.finish(results.fixed);
     }
     if (mode === "both" || mode === "agent") {
       log("Running autonomous agent...");
       const provider = createProvider(providerName, { model: args.model });
+      const tracer = useTrace
+        ? startRun({ mode: "agent", providerName, model: provider.model, pr: ctx.pr, fixture: args.fixture, sessionId })
+        : null;
       const metrics = new Metrics({
         mode: "agent",
         model: provider.model,
         pricePerMTokens: priceFor(provider.model),
       }).start();
       const maxIterations = Number(args["max-agent-steps"] ?? 8);
-      results.agent = await agentReview(ctx, provider, metrics, { maxIterations });
+      results.agent = await agentReview(ctx, tracer ? tracer.wrap(provider) : provider, metrics, {
+        maxIterations,
+        tracer,
+      });
       metrics.stop();
       results.agent.metrics = metrics.toJSON();
+      tracer?.finish(results.agent);
     }
   } catch (err) {
+    await shutdownTracing();
     if (err instanceof ProviderError) {
       process.stderr.write(`Provider error: ${err.message}\n`);
       return 3;
@@ -137,10 +157,12 @@ async function main(argv) {
       }
     }
   } catch (err) {
+    await shutdownTracing();
     process.stderr.write(`Report generation failed: ${err.message}\n`);
     return 4;
   }
 
+  await shutdownTracing(); // flush pending Langfuse events before exit
   return 0;
 }
 

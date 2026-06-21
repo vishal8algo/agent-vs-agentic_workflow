@@ -24,6 +24,7 @@ import { decisionPrompt, parseDecision } from "./agentPrompt.js";
 export async function agentReview(context, provider, metrics, opts = {}) {
   const maxIterations = opts.maxIterations ?? 8;
   const maxToolCalls = opts.maxToolCalls ?? 12;
+  const tracer = opts.tracer ?? null; // optional Langfuse tracer (spec 05)
 
   const state = { findings: [], done: false }; // tools mutate this
   const transcript = []; // human-readable lines fed back into each decision
@@ -60,6 +61,7 @@ export async function agentReview(context, provider, metrics, opts = {}) {
     } else {
       observation = tool.run(decision.args, { context, state });
       metrics.recordToolCall();
+      tracer?.toolSpan(decision.tool, decision.args, observation);
     }
 
     transcript.push(`ACTION: ${decision.tool} ${compactArgs(decision.args)}`);
