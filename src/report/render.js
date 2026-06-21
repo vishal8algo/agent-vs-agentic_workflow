@@ -4,6 +4,7 @@
 // write.js). Keeping rendering pure makes the output easy to snapshot-test.
 
 import { SEVERITY } from "../review/result.js";
+import { computeComparison } from "./compare.js";
 
 const SEVERITY_ORDER = [
   SEVERITY.CRITICAL,
@@ -52,35 +53,55 @@ export function renderReviewReport(result, context) {
   ].join("\n");
 }
 
-/** Render the side-by-side comparison report. */
+/** Render the analytical side-by-side comparison report (spec 4). */
 export function renderComparison(fixed, agent, context) {
-  const f = fixed.metrics;
-  const a = agent.metrics;
+  const cmp = computeComparison(fixed, agent);
+  const c = cmp.cost;
+
   return [
     `# Comparison — PR #${context.pr.number}`,
     "",
     `**PR:** ${context.pr.title}`,
     "",
-    "Both modes reviewed the **same** normalized PR context. Differences below",
-    "come only from *how* each approach works, not from different inputs.",
+    "Both modes reviewed the **same** normalized PR context, so every difference",
+    "below comes from *how* each approach works — not from different inputs.",
     "",
-    "## Outcome",
+    "Underlying reports: [fixed-review.md](fixed-review.md) · [agent-review.md](agent-review.md)",
+    "",
+    "## Outcome & agreement",
     "",
     "| | Fixed workflow | Autonomous agent |",
     "| --- | --- | --- |",
     `| Merge-readiness | \`${fixed.status}\` | \`${agent.status}\` |`,
-    `| Findings | ${fixed.findings.length} | ${agent.findings.length} |`,
+    `| Findings | ${cmp.findings.fixedTotal} | ${cmp.findings.agentTotal} |`,
+    `| Worst severity | ${cmp.findings.fixedTopSeverity ?? "—"} | ${cmp.findings.agentTopSeverity ?? "—"} |`,
+    "",
+    cmp.agreement.agree
+      ? `**Agreement:** both reached the same verdict (\`${cmp.agreement.fixedStatus}\`).`
+      : `**Disagreement:** fixed → \`${cmp.agreement.fixedStatus}\`, agent → \`${cmp.agreement.agentStatus}\`.`,
+    "",
+    "## Findings, side by side",
+    "",
+    "| Mode | crit | high | med | low | info |",
+    "| --- | --- | --- | --- | --- | --- |",
+    severityRow("Fixed", cmp.findings.fixedCounts),
+    severityRow("Agent", cmp.findings.agentCounts),
+    "",
+    "_Findings are compared structurally (counts + severity). Semantic overlap" +
+      " detection — 'did autonomy surface a genuinely new issue?' — needs the" +
+      " real model and is a later enhancement._",
     "",
     "## Operational comparison",
     "",
-    "| Metric | Fixed workflow | Autonomous agent |",
-    "| --- | --- | --- |",
-    `| Latency (ms) | ${ms(f.elapsedMs)} | ${ms(a.elapsedMs)} |`,
-    `| LLM calls | ${f.llmCalls} | ${a.llmCalls} |`,
-    `| Tool calls | ${f.toolCalls} | ${a.toolCalls} |`,
-    `| Steps / iterations | ${f.steps} | ${a.steps} |`,
-    `| Tokens (in/out) | ${f.tokens.input}/${f.tokens.output} | ${a.tokens.input}/${a.tokens.output} |`,
-    `| Est. cost (USD) | ${f.estCostUsd} | ${a.estCostUsd} |`,
+    "| Metric | Fixed | Agent | Δ (agent vs fixed) |",
+    "| --- | --- | --- | --- |",
+    metricRow("Latency (ms)", ms(c.elapsedMs.fixed), ms(c.elapsedMs.agent), c.elapsedMs),
+    metricRow("LLM calls", c.llmCalls.fixed, c.llmCalls.agent, c.llmCalls),
+    metricRow("Tool calls", c.toolCalls.fixed, c.toolCalls.agent, c.toolCalls),
+    metricRow("Steps / iterations", c.steps.fixed, c.steps.agent, c.steps),
+    metricRow("Input tokens", c.inputTokens.fixed, c.inputTokens.agent, c.inputTokens),
+    metricRow("Output tokens", c.outputTokens.fixed, c.outputTokens.agent, c.outputTokens),
+    metricRow("Est. cost (USD)", c.estCostUsd.fixed, c.estCostUsd.agent, c.estCostUsd),
     "",
     "## Qualitative comparison",
     "",
@@ -91,19 +112,68 @@ export function renderComparison(fixed, agent, context) {
     "| Debuggability | High — stage in, stage out | Needs the action trace to follow decisions |",
     "| Adaptivity | Low — cannot deviate | High — can dig where it matters |",
     "",
-    "## When to prefer which",
+    "## When the fixed workflow is better",
     "",
     bulletList([
-      "Prefer the **fixed workflow** when you need predictable cost/latency and auditable steps.",
-      "Prefer the **autonomous agent** when PRs vary widely and adaptive investigation pays off.",
+      "You need **predictable cost and latency** — the stage count is fixed.",
+      "The review must be **auditable**: same steps, same order, every run.",
+      "You want **uniform coverage** — every dimension is reviewed whether or not the model thinks it matters.",
     ]),
     "",
-    "## Note",
+    "## When the autonomous agent is better",
     "",
-    "Spec-1 stub: numbers reflect scaffolding, not real review reasoning. " +
-      "They become meaningful once specs 2 & 3 and the Gemini provider land.",
+    bulletList([
+      "PRs **vary widely** and a fixed checklist would waste effort or miss the point.",
+      "**Targeted investigation** pays off — the agent reads only what looks relevant.",
+      "You value **adaptivity** over strict repeatability.",
+    ]),
+    "",
+    "## Cost of extra autonomy",
+    "",
+    cmp.autonomyVerdict,
+    "",
+    bulletList([
+      `Round-trips: ${c.llmCalls.fixed} → ${c.llmCalls.agent} model calls${pctNote(c.llmCalls.deltaPct)}.`,
+      `Input tokens: ${c.inputTokens.fixed} → ${c.inputTokens.agent}${pctNote(c.inputTokens.deltaPct)}.`,
+      `Extra moving parts: ${c.toolCalls.agent} tool call(s) + a decision trace to audit.`,
+    ]),
+    "",
+    "## Recommendation for training discussion",
+    "",
+    "Use the fixed workflow as the **default** for routine, comparable reviews;" +
+      " reach for the agent when a PR is unusual enough that adaptive digging" +
+      " earns back its extra round-trips and reduced predictability. Read the two" +
+      " linked reports alongside this one to see *how* each reached its verdict.",
+    "",
+    fixed.metrics.model === "mock-1"
+      ? "_Note: run on the deterministic mock provider — findings are labelled samples." +
+        " Numbers are real; the review reasoning becomes real once Gemini is wired._"
+      : "",
     "",
   ].join("\n");
+}
+
+function severityRow(label, counts = {}) {
+  return `| ${label} | ${counts.critical ?? 0} | ${counts.high ?? 0} | ${counts.medium ?? 0} | ${counts.low ?? 0} | ${counts.info ?? 0} |`;
+}
+
+function metricRow(label, fixedVal, agentVal, pair) {
+  return `| ${label} | ${fixedVal} | ${agentVal} | ${formatDelta(pair)} |`;
+}
+
+function formatDelta(pair) {
+  const sign = pair.delta > 0 ? "+" : "";
+  const pct = pair.deltaPct === null ? "" : ` (${sign}${pair.deltaPct}%)`;
+  return `${sign}${round(pair.delta)}${pct}`;
+}
+
+function pctNote(pct) {
+  if (pct === null) return "";
+  return pct === 0 ? " (no change)" : ` (${pct > 0 ? "+" : ""}${pct}%)`;
+}
+
+function round(n) {
+  return Math.round(n * 1e6) / 1e6;
 }
 
 // ---- helpers ----
