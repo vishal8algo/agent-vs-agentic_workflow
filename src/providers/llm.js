@@ -16,6 +16,7 @@
 // identical access to "the model" — another piece of keeping the comparison fair.
 
 import { MockProvider } from "./mock.js";
+import { GeminiProvider } from "./gemini.js";
 
 /**
  * Create a provider by name.
@@ -28,10 +29,7 @@ export function createProvider(name = "mock", options = {}) {
     case "mock":
       return new MockProvider(options);
     case "gemini":
-      // Wired up in a later step (step: swap mock -> real Gemini).
-      throw new ProviderError(
-        "Gemini provider is not implemented yet. Use --provider mock for now."
-      );
+      return new GeminiProvider(options);
     default:
       throw new ProviderError(`Unknown provider: "${name}". Try "mock" or "gemini".`);
   }

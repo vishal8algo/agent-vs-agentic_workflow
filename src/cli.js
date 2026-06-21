@@ -41,6 +41,13 @@ Options:
 `;
 
 async function main(argv) {
+  // Load .env (GEMINI_API_KEY, GEMINI_MODEL, ...) if present. Harmless if absent.
+  try {
+    process.loadEnvFile(".env");
+  } catch {
+    /* no .env — fine for mock runs */
+  }
+
   const args = parseArgs(argv);
 
   if (args.help || args._[0] !== "review") {

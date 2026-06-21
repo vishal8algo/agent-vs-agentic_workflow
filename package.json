@@ -8,7 +8,9 @@
   },
   "scripts": {
     "review": "node src/cli.js review",
-    "capture": "node scripts/capture-fixture.js"
+    "capture": "node scripts/capture-fixture.js",
+    "view": "node scripts/serve-reports.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20"
