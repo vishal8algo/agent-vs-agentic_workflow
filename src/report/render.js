@@ -173,6 +173,9 @@ function pctNote(pct) {
 }
 
 function round(n) {
+  // Whole numbers for sizeable values (ms, tokens, calls); keep small decimals
+  // for tiny ones (USD cost deltas).
+  if (Math.abs(n) >= 1) return Math.round(n);
   return Math.round(n * 1e6) / 1e6;
 }
 
