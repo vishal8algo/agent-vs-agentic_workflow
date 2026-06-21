@@ -15,7 +15,10 @@
 
 import { loadContext, InputError } from "./context/loadContext.js";
 import { createProvider, ProviderError } from "./providers/llm.js";
+import { priceFor } from "./providers/pricing.js";
 import { Metrics } from "./metrics.js";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { fixedReview } from "./workflow/fixedReview.js";
 import { agentReview } from "./agent/agentReview.js";
 import { writeReports } from "./report/write.js";
@@ -32,6 +35,7 @@ Options:
   --provider <mock|gemini>    LLM provider                  (default: mock)
   --model <name>              model name for the provider
   --max-agent-steps <n>       agent loop guardrail          (default: 8)
+  --trace                     also write raw prompts/responses to reports/traces/
   --verbose                   print progress
   --help                      show this help
 `;
@@ -78,7 +82,11 @@ async function main(argv) {
     if (mode === "both" || mode === "fixed") {
       log("Running fixed workflow...");
       const provider = createProvider(providerName, { model: args.model });
-      const metrics = new Metrics({ mode: "fixed", model: provider.model }).start();
+      const metrics = new Metrics({
+        mode: "fixed",
+        model: provider.model,
+        pricePerMTokens: priceFor(provider.model),
+      }).start();
       results.fixed = await fixedReview(ctx, provider, metrics);
       metrics.stop();
       results.fixed.metrics = metrics.toJSON();
@@ -86,7 +94,11 @@ async function main(argv) {
     if (mode === "both" || mode === "agent") {
       log("Running autonomous agent...");
       const provider = createProvider(providerName, { model: args.model });
-      const metrics = new Metrics({ mode: "agent", model: provider.model }).start();
+      const metrics = new Metrics({
+        mode: "agent",
+        model: provider.model,
+        pricePerMTokens: priceFor(provider.model),
+      }).start();
       const maxIterations = Number(args["max-agent-steps"] ?? 8);
       results.agent = await agentReview(ctx, provider, metrics, { maxIterations });
       metrics.stop();
@@ -104,6 +116,19 @@ async function main(argv) {
   try {
     const written = await writeReports(outDir, ctx, results);
     for (const p of written) process.stdout.write(`Wrote ${p}\n`);
+
+    // Optional: raw prompt/response traces (docs/open-questions.md Q08).
+    if (args.trace) {
+      const traceDir = join(outDir, "traces");
+      await mkdir(traceDir, { recursive: true });
+      for (const m of ["fixed", "agent"]) {
+        if (results[m]?.trace) {
+          const p = join(traceDir, `${m}-trace.json`);
+          await writeFile(p, JSON.stringify(results[m].trace, null, 2) + "\n", "utf8");
+          process.stdout.write(`Wrote ${p}\n`);
+        }
+      }
+    }
   } catch (err) {
     process.stderr.write(`Report generation failed: ${err.message}\n`);
     return 4;

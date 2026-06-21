@@ -37,6 +37,8 @@ export function renderReviewReport(result, context) {
     "",
     "## Findings",
     "",
+    renderFindingsSummary(result),
+    "",
     renderFindings(result.findings),
     "",
     "## Limitations",
@@ -105,6 +107,16 @@ export function renderComparison(fixed, agent, context) {
 }
 
 // ---- helpers ----
+
+function renderFindingsSummary(result) {
+  const c = result.counts;
+  if (!c) return "";
+  return (
+    `**${result.findings.length} finding(s):** ` +
+    `${c.critical} critical · ${c.high} high · ${c.medium} medium · ` +
+    `${c.low} low · ${c.info} info`
+  );
+}
 
 function renderFindings(findings) {
   if (!findings || findings.length === 0) {
