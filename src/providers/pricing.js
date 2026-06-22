@@ -15,6 +15,7 @@ export const PRICING = {
   "gemini-2.0-flash": { input: 0.1, output: 0.4 },
   "gemini-2.0-flash-lite": { input: 0.075, output: 0.3 },
   "gemini-3.5-flash": { input: 0.3, output: 2.5 },
+  "gemini-3.1-flash-lite": { input: 0.1, output: 0.4 },
   "gemini-flash-lite-latest": { input: 0.1, output: 0.4 },
 };
 
