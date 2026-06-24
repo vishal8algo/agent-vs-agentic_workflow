@@ -1,0 +1,38 @@
+{
+  "source": "fixture:github",
+  "capturedFrom": "https://github.com/honojs/hono/pull/5028",
+  "pr": {
+    "url": "https://github.com/honojs/hono/pull/5028",
+    "repo": "honojs/hono",
+    "number": 5028,
+    "title": "ci: publish to npm from CI with OIDC trusted publishing",
+    "author": "yusukebe",
+    "description": "Currently, I publish an npm package manually using the `release` script, which runs the `np` command on my local machine. This has a risk of enabling supply chain attacks. If my machine is hijacked, the package may contain malicious things.\r\n\r\nIn this PR, switch the `release` to `np --no-publish` so the local step only bumps the version and pushes the tag. Plus, I added the CI script to `release.yml` to release to npm using OIDC trusted publishing with provenance. \r\n\r\n### The author should do the following, if applicable\r\n\r\n- [ ] Add tests\r\n- [ ] Run tests\r\n- [ ] `bun run format:fix && bun run lint:fix` to format the code\r\n- [ ] Add [TSDoc](https://tsdoc.org/)/[JSDoc](https://jsdoc.app/about-getting-started) to document the code\r\n",
+    "baseBranch": "main",
+    "headBranch": "ci/npm-ci-oidc",
+    "state": "closed"
+  },
+  "files": [
+    {
+      "path": ".github/workflows/release.yml",
+      "status": "modified",
+      "additions": 23,
+      "deletions": 0,
+      "patch": "@@ -9,6 +9,29 @@ permissions:\n   contents: read\n \n jobs:\n+  npm:\n+    name: publish-to-npm\n+    runs-on: ubuntu-latest\n+\n+    permissions:\n+      contents: read\n+      id-token: write\n+\n+    steps:\n+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6\n+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6\n+        with:\n+          node-version-file: '.tool-versions'\n+          registry-url: 'https://registry.npmjs.org'\n+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2\n+        with:\n+          bun-version-file: '.tool-versions'\n+      - run: npm install -g npm@11.17.0\n+      - run: bun install --frozen-lockfile\n+      - run: bun run build\n+      - name: Publish to npm\n+        run: npm publish --provenance --access public\n+\n   jsr:\n     name: publish-to-jsr\n     runs-on: ubuntu-latest"
+    },
+    {
+      "path": "package.json",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -31,7 +31,7 @@\n     \"watch\": \"bun run --shell bun remove-dist && bun ./build/build.ts --watch && bun run copy:package.cjs.json\",\n     \"coverage\": \"vitest --run --coverage\",\n     \"prerelease\": \"bun test:deno && bun run build\",\n-    \"release\": \"np\",\n+    \"release\": \"np --no-publish\",\n     \"remove-dist\": \"rm -rf dist\"\n   },\n   \"exports\": {"
+    }
+  ],
+  "commits": [
+    {
+      "sha": "993200f",
+      "message": "ci: publish to npm from CI with OIDC trusted publishing"
+    }
+  ],
+  "checks": []
+}
